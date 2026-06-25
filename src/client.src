@@ -1,0 +1,98 @@
+// client.src — the reactive view (wasm). It holds the user list and renders it;
+// the host fetches the JSON API and hands it here via load(), and mutations go
+// host → API → reload. The keyed list means a reload patches only the rows that
+// actually changed. Composed with reactive.src; built to wasm.
+
+var ver = 0
+var ids = []int{}
+var names = []string{}
+var emails = []string{}
+var actives = []int{}
+var n = 0
+var active_sig = 0
+
+func at_id(id) (k) {
+    k = 0 - 1
+    i := 0
+    while i < n { if ids[i] == id { k = i }  i = i + 1 }
+}
+func name_of(id) (s) { s = ""  k := at_id(id)  if k >= 0 { s = names[k] } }
+func email_of(id) (s) { s = ""  k := at_id(id)  if k >= 0 { s = emails[k] } }
+
+// json_get returns raw JSON tokens — strings keep their surrounding quotes. Strip
+// them. (For names/emails; a fuller unescape would also handle \" \\ \n.)
+func unq(s) (r) {
+    r = s
+    if len(s) >= 2 {
+        if substr(s, 0, 1) == "\"" { r = substr(s, 1, len(s) - 1) }
+    }
+}
+
+// load_buf returns a buffer for the host to write the users JSON into.
+export func load_buf(nbytes) (p) { p = alloc(nbytes + 1) }
+
+// load parses the users JSON (the host wrote it into p) into parallel arrays and
+// triggers a re-render. json_get returns "" for past-the-end → the loop ends.
+export func load(p) {
+    blob := ptr_str(p)
+    free(p)
+    ids = []int{}  names = []string{}  emails = []string{}  actives = []int{}  n = 0
+    more := 1
+    i := 0
+    while more == 1 {
+        idv, e := json_get(blob, "[" + str(i) + "].id")
+        if e != "" {
+            more = 0
+        } else {
+            nm, _ := json_get(blob, "[" + str(i) + "].name")
+            em, _ := json_get(blob, "[" + str(i) + "].email")
+            ac, _ := json_get(blob, "[" + str(i) + "].active")
+            ids = append(ids, parse_int(idv))
+            names = append(names, unq(nm))
+            emails = append(emails, unq(em))
+            actives = append(actives, parse_int(ac))
+            n = n + 1
+            i = i + 1
+        }
+    }
+    set(ver, get(ver) + 1)
+}
+
+// keys: id*2 + active, so a toggle changes the key and re-renders just that row.
+func keys_csv() (s) {
+    get(ver)
+    ks := []int{}
+    i := 0
+    while i < n { ks = append(ks, ids[i] * 2 + actives[i])  i = i + 1 }
+    s = csv(ks)
+}
+
+func row_html(key) (h) {
+    id := key / 2
+    act := key - id * 2
+    cls := "user"
+    lbl := "active"
+    if act == 0 { cls = "user off"  lbl = "inactive" }
+    h = "<span class=\"" + cls + "\" data-id=\"" + str(id) + "\">"
+    h = h + "<span class=nm>" + name_of(id) + "</span>"
+    h = h + "<span class=em>" + email_of(id) + "</span>"
+    h = h + "<button class=tg data-act=\"active\">" + lbl + "</button>"
+    h = h + "<button class=del data-act=\"del\">&times;</button></span>"
+}
+
+export func start() {
+    ver = signal(0)
+    active_sig = computed(func() {
+        get(ver)
+        c := 0
+        i := 0
+        while i < n { if actives[i] == 1 { c = c + 1 }  i = i + 1 }
+        return c
+    })
+    mount("app",
+        "<h1>users back-office</h1>" +
+        "<div class=add><input id=u_name placeholder=\"name\"><input id=u_email placeholder=\"email\"><button id=u_add>add</button></div>" +
+        list("users", func() { return keys_csv() }, func(key) { return row_html(key) }) +
+        "<p class=foot><b>" + slot("active", func() { return str(get(active_sig)) }) +
+        "</b> active · <b>" + slot("total", func() { get(ver)  return str(n) }) + "</b> total</p>")
+}

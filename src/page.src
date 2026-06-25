@@ -1,0 +1,27 @@
+// page.src — server-only: the SPA shell (CSS + an empty #app the client mounts
+// into) and host_js() (the generic JS host, embedded at build time).
+func page() (h) {
+    h = "<!doctype html><html lang=en><head><meta charset=utf-8>"
+    h = h + "<meta name=viewport content=\"width=device-width,initial-scale=1\">"
+    h = h + "<title>machin · users back-office</title>" + styles() + "</head><body>"
+    h = h + "<main class=card><div id=app>loading…</div></main>"
+    h = h + "<script type=module>" + host_js() + "</script>"
+    h = h + "</body></html>"
+}
+
+func styles() (s) {
+    s = "<style>:root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;"
+    s = s + "font:15px/1.5 system-ui,sans-serif;color:#e6e6f0;background:radial-gradient(120% 120% at 50% 0%,#0e1626 0%,#08080f 60%)}"
+    s = s + ".card{width:min(540px,94vw);padding:24px 28px 28px;border-radius:16px;background:#0f1422;border:1px solid #20304f;box-shadow:0 20px 60px -20px #000}"
+    s = s + "h1{margin:0 0 14px;font-size:18px;color:#6fa8ff}"
+    s = s + ".add{display:flex;gap:8px;margin-bottom:14px}.add input{flex:1;min-width:0;padding:9px 11px;border-radius:8px;border:1px solid #2c3a63;background:#0b101d;color:#e6e6f0}"
+    s = s + ".add button{padding:9px 14px;font-weight:700;cursor:pointer;border-radius:8px;border:1px solid #3a63c8;background:#2546a0;color:#fff}"
+    s = s + "#users{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}#users li{list-style:none}"
+    s = s + ".user{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:9px;background:#151d33;border:1px solid #243156}"
+    s = s + ".user .nm{font-weight:700;min-width:120px}.user .em{flex:1;color:#9fb0d4;font-size:13px;overflow:hidden;text-overflow:ellipsis}"
+    s = s + ".user.off{opacity:.5}.user .tg{cursor:pointer;border-radius:6px;border:1px solid #2c6648;background:#173a2a;color:#9fe6c0;font-size:12px;padding:4px 9px}"
+    s = s + ".user.off .tg{border-color:#5a4a2c;background:#3a2e17;color:#e6cf9f}"
+    s = s + ".user .del{cursor:pointer;border:none;background:none;color:#6b76a0;font-size:18px;line-height:1}.user .del:hover{color:#ff7a90}"
+    s = s + ".foot{margin-top:16px;font-size:13px;color:#8d86b8;text-align:center}.foot b{color:#cfe0ff}"
+    s = s + "</style>"
+}

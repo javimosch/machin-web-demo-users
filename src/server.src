@@ -1,0 +1,81 @@
+// server.src — the back-office server: a CLI that runs an HTTP server backed by
+// SQLite. It serves the SPA shell + its own wasm, and a JSON CRUD API over a users
+// table. Composed with machweb + flags. The browser client is a reactive view over
+// this API (see client.src).
+
+var db = 0
+
+func init_db() {
+    db = sqlite_open("users.db")
+    sqlite_exec(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1)")
+    cnt := sqlite_query(db, "SELECT count(*) AS c FROM users")
+    c, _ := json_get(cnt, "[0].c")
+    if parse_int(c) == 0 {
+        sqlite_exec(db, "INSERT INTO users (name, email) VALUES (?, ?)", []string{"Ada Lovelace", "ada@example.com"})
+        sqlite_exec(db, "INSERT INTO users (name, email) VALUES (?, ?)", []string{"Grace Hopper", "grace@example.com"})
+        sqlite_exec(db, "INSERT INTO users (name, email) VALUES (?, ?)", []string{"Linus Torvalds", "linus@example.com"})
+    }
+}
+
+// users_json returns the current users as a JSON array (sqlite_query already
+// formats rows as JSON, named by column — composes with json_get on the client).
+func users_json() (s) {
+    s = sqlite_query(db, "SELECT id, name, email, active FROM users ORDER BY id")
+}
+
+// qstr reads a string query parameter (?key=...), URL-decoded; "" if absent.
+func qstr(path, key) (v) {
+    v = ""
+    i := index(path, key + "=")
+    if i >= 0 {
+        rest := substr(path, i + len(key) + 1, len(path))
+        amp := index(rest, "&")
+        if amp >= 0 { rest = substr(rest, 0, amp) }
+        v = url_decode(rest)
+    }
+}
+
+func qint(path, key) (n) {
+    n = 0 - 1
+    s := qstr(path, key)
+    if s != "" { n = parse_int(s) }
+}
+
+func handle(req) (res) {
+    if req.path == "/app.wasm" {
+        return ok_wasm(read_file_bytes("app.wasm"))
+    }
+    if has_prefix(req.path, "/api/users/del") {
+        id := qint(req.path, "id")
+        if id >= 0 { sqlite_exec(db, "DELETE FROM users WHERE id = ?", []string{str(id)}) }
+        return ok_json(users_json())
+    }
+    if has_prefix(req.path, "/api/users/active") {
+        id := qint(req.path, "id")
+        if id >= 0 { sqlite_exec(db, "UPDATE users SET active = 1 - active WHERE id = ?", []string{str(id)}) }
+        return ok_json(users_json())
+    }
+    if has_prefix(req.path, "/api/users") {
+        if req.method == "POST" {
+            nm := qstr(req.path, "name")
+            em := qstr(req.path, "email")
+            if nm != "" { sqlite_exec(db, "INSERT INTO users (name, email) VALUES (?, ?)", []string{nm, em}) }
+        }
+        return ok_json(users_json())
+    }
+    return ok_html(page())
+}
+
+func main() {
+    fs := new_flags("machin-users")
+    fs = flag_int(fs, "port", "p", "48097", "HTTP port to listen on")
+    fs = parse_flags(fs, args())
+    if flag_on(fs, "help") {
+        println(flag_usage(fs))
+        return
+    }
+    init_db()
+    port := flag_int_val(fs, "port")
+    println("machin · users back-office on http://localhost:" + str(port))
+    serve(port, func(req) { return handle(req) })
+}
